@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Лабиринт</title>
+	<style>
+		/* Запрет выделения текста */
+		* {
+			user-select: none;
+		}
+
+		/* Фон с мягким градиентом */
+		body {
+			font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+			background: linear-gradient(135deg, #f0f0f0, #ffffff);
+			margin: 0;
+			padding: 0;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			height: 100vh;
+			-webkit-app-region: drag;
+		}
+
+		/* Стиль контейнера с 3D эффектом */
+		#container {
+			background-color: #e0e0e0;
+			border-radius: 20px;
+			box-shadow: 8px 8px 16px #bebebe, -8px -8px 16px #ffffff;
+			padding: 40px;
+			width: 800px;
+			max-width: 100%;
+			text-align: center;
+		}
+
+		h1 {
+			color: #333;
+			font-size: 28px;
+			margin-bottom: 30px;
+		}
+
+		/* Стиль canvas с фиксированной тенью */
+		#mazeCanvas {
+			border-radius: 4px;
+			box-shadow: 12px 12px 24px rgba(0, 0, 0, 0.3), -12px -12px 24px rgba(255, 255, 255, 0.9);
+			margin-bottom: 30px;
+			width: 500px;
+			height: 500px;
+			transform: scale(1.01);
+			/* Зафиксированное увеличение */
+			-webkit-app-region: no-drag;
+		}
+
+		/* Стиль блока управления */
+		#controls {
+			margin-top: 20px;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+		}
+
+		/* Стиль инпутов с эффектом тени */
+		input::-webkit-outer-spin-button,
+		input::-webkit-inner-spin-button {
+			-webkit-appearance: none;
+			margin: 0;
+		}
+
+		#controls input[type="number"] {
+			width: 60px;
+			padding: 10px;
+			border-radius: 10px;
+			border: none;
+			background: #e0e0e0;
+			box-shadow: inset 6px 6px 12px #bebebe, inset -6px -6px 12px #ffffff;
+			transition: box-shadow 0.3s ease;
+			font-size: 16px;
+			text-align: center;
+			-webkit-app-region: no-drag;
+		}
+
+		/* Эффект для фокуса инпутов */
+		#controls input[type="number"]:focus {
+			outline: none;
+			box-shadow: inset 3px 3px 6px #bebebe, inset -3px -3px 6px #ffffff;
+		}
+
+		/* Стиль кнопок с анимацией и эффектом 3D */
+		#controls button {
+			background-color: #4CAF50;
+			color: white;
+			padding: 15px 30px;
+			border-radius: 15px;
+			border: none;
+			cursor: pointer;
+			box-shadow: 6px 6px 12px rgba(0, 0, 0, 0.2), -6px -6px 12px rgba(255, 255, 255, 0.5);
+			transition: background-color 0.3s, box-shadow 0.3s, transform 0.2s;
+			font-size: 16px;
+			-webkit-app-region: no-drag;
+		}
+
+		/* Эффект увеличения кнопки при наведении */
+		#controls button:hover {
+			background-color: #45a049;
+			transform: translateY(-2px);
+			box-shadow: 8px 8px 16px rgba(0, 0, 0, 0.2), -8px -8px 16px rgba(255, 255, 255, 0.5);
+		}
+
+		/* Скрываем стандартный input для выбора файла */
+		#fileInput {
+			display: none;
+		}
+
+		/* Стиль для кастомного блока выбора файлов */
+		#fileLabel {
+			margin-top: 20px;
+			padding: 15px;
+			border-radius: 15px;
+			border: none;
+			background: #e0e0e0;
+			cursor: pointer;
+			box-shadow: 6px 6px 12px rgba(0, 0, 0, 0.2), -6px -6px 12px rgba(255, 255, 255, 0.5);
+			transition: box-shadow 0.3s ease;
+			-webkit-app-region: no-drag;
+		}
+
+		/* Эффект для загрузки файла при наведении */
+		#fileLabel:hover {
+			box-shadow: 8px 8px 16px rgba(0, 0, 0, 0.2), -8px -8px 16px rgba(255, 255, 255, 0.5);
+		}
+	</style>
+</head>
+
+<body>
+
+	<div id="container">
+		<h1>Лабиринт</h1>
+
+		<canvas id="mazeCanvas" width="500" height="500"></canvas>
+
+		<div id="controls">
+			<div>
+				<label for="rowsInput">Rows:</label>
+				<input type="number" id="rowsInput" min="2" max="50" value="5">
+				<label for="colsInput">Cols:</label>
+				<input type="number" id="colsInput" min="2" max="50" value="5">
+			</div>
+			<div>
+				<button id="generateBtn">Сгенерировать лабиринт</button>
+				<button id="clearBtn">Очистить лабиринт</button>
+			</div>
+		</div>
+		<div id="fileLabel">Файл не выбран</div>
+		<input type="file" id="fileInput">
+	</div>
+
+	<script>
+		const canvas = document.getElementById('mazeCanvas');
+		const ctx = canvas.getContext('2d');
+		const canvasSize = 500;
+		const wallThickness = 2;
+		let verticalWalls = [];
+		let horizontalWalls = [];
+		let rows, cols;
+		let cellWidth, cellHeight;
+		let clickCount = 0;
+		let fromPoint = null;
+		let toPoint = null;
+		let isPathDrawn = false;
+		let isAnimating = false;
+
+		// Генерация лабиринта
+		document.getElementById('generateBtn').addEventListener('click', () => {
+			const rowsInput = document.getElementById('rowsInput').value;
+			const colsInput = document.getElementById('colsInput').value;
+
+			// Проверка на максимальный размер
+			if (rowsInput > 50 || colsInput > 50) {
+				alert("Maximum maze size is 50x50.");
+				return;
+			}
+
+			const mazeData = {
+				rows: parseInt(rowsInput),
+				cols: parseInt(colsInput)
+			};
+
+			fetch('http://localhost:8080/generate-maze', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(mazeData)
+			})
+				.then(response => response.json())
+				.then(data => {
+					rows = data.rows;
+					cols = data.cols;
+					verticalWalls = data.vertical;
+					horizontalWalls = data.horizontal;
+
+					cellWidth = (canvasSize - wallThickness) / cols;
+					cellHeight = (canvasSize - wallThickness) / rows;
+					drawMaze();
+				})
+				.catch(error => console.error('Error:', error));
+		});
+
+		// Очистка лабиринта
+		document.getElementById('clearBtn').addEventListener('click', () => {
+			ctx.clearRect(0, 0, canvas.width, canvas.height);
+			verticalWalls = [];
+			horizontalWalls = [];
+			fromPoint = null;
+			toPoint = null;
+			clickCount = 0;
+			isPathDrawn = false;
+			isAnimating = false;
+		});
+
+		// Логика для кастомного блока выбора файла
+		const fileInput = document.getElementById('fileInput');
+		const fileLabel = document.getElementById('fileLabel');
+
+		// Открываем окно выбора файла при клике на кастомный блок
+		fileLabel.addEventListener('click', () => {
+			fileInput.click();
+		});
+
+		// После выбора файла обновляем текст кастомного блока
+		fileInput.addEventListener('change', (event) => {
+			const file = event.target.files[0];
+			if (file) {
+				fileLabel.textContent = file.name;
+
+				const reader = new FileReader();
+				reader.onload = function (e) {
+					const content = e.target.result;
+					parseMaze(content);
+					drawMaze();
+				};
+				reader.readAsText(file);
+			} else {
+				fileLabel.textContent = "Файл не выбран";
+			}
+		});
+
+		// Парсинг файла лабиринта
+		function parseMaze(content) {
+			const lines = content.trim().split('\n').filter(line => line.trim().length > 0);
+			[rows, cols] = lines[0].split(' ').map(Number);
+
+			// Проверка на максимальный размер
+			if (rows > 50 || cols > 50) {
+				alert("Maximum maze size is 50x50.");
+				return;
+			}
+
+			cellWidth = (canvasSize - wallThickness) / cols;
+			cellHeight = (canvasSize - wallThickness) / rows;
+			verticalWalls = [];
+			horizontalWalls = [];
+
+			for (let i = 1; i <= rows; i++) {
+				const wallRow = lines[i].trim().split(' ').map(Number);
+				verticalWalls.push(...wallRow);
+			}
+
+			for (let i = rows + 1; i <= 2 * rows; i++) {
+				const wallRow = lines[i].trim().split(' ').map(Number);
+				horizontalWalls.push(...wallRow);
+			}
+		}
+
+		// Рисование лабиринта
+		function drawMaze() {
+			ctx.clearRect(0, 0, canvas.width, canvas.height);
+			ctx.strokeStyle = 'black';
+			ctx.lineWidth = wallThickness;
+
+			// Отрисовка вертикальных стен
+			for (let row = 0; row < rows; row++) {
+				for (let col = 0; col < cols; col++) {
+					if (verticalWalls[row * cols + col] === 1) {
+						const x = (col + 1) * cellWidth;
+						const y1 = row * cellHeight;
+						const y2 = (row + 1) * cellHeight;
+						ctx.beginPath();
+						ctx.moveTo(x, y1);
+						ctx.lineTo(x, y2);
+						ctx.stroke();
+					}
+				}
+			}
+
+			// Отрисовка горизонтальных стен
+			for (let row = 0; row < rows; row++) {
+				for (let col = 0; col < cols; col++) {
+					if (horizontalWalls[row * cols + col] === 1) {
+						const y = (row + 1) * cellHeight;
+						const x1 = col * cellWidth;
+						const x2 = (col + 1) * cellWidth;
+						ctx.beginPath();
+						ctx.moveTo(x1, y);
+						ctx.lineTo(x2, y);
+						ctx.stroke();
+					}
+				}
+			}
+
+			// Отрисовка внешних границ лабиринта
+			ctx.beginPath();
+			ctx.moveTo(0, 0);
+			ctx.lineTo(0, canvasSize);
+			ctx.lineTo(canvasSize, canvasSize);
+			ctx.lineTo(canvasSize, 0);
+			ctx.lineTo(0, 0);
+			ctx.stroke();
+		}
+
+		// Отрисовка пути
+		function drawPath(path) {
+			ctx.clearRect(0, 0, canvas.width, canvas.height);
+			drawMaze();
+
+			let i = 0;
+			isAnimating = true; // Начало анимации
+
+			function animatePath() {
+				if (i >= path.length - 1) {
+					drawCircle(fromPoint.x, fromPoint.y, 'blue');
+					drawCircle(toPoint.x, toPoint.y, 'green');
+					isAnimating = false; // Конец анимации
+					return;
+				}
+
+				const fromX = (path[i].Y - 1) * cellWidth + cellWidth / 2;
+				const fromY = (path[i].X - 1) * cellHeight + cellHeight / 2;
+				const toX = (path[i + 1].Y - 1) * cellWidth + cellWidth / 2;
+				const toY = (path[i + 1].X - 1) * cellHeight + cellHeight / 2;
+
+				ctx.strokeStyle = 'red';
+				ctx.lineWidth = 3;
+				ctx.beginPath();
+				ctx.moveTo(fromX, fromY);
+				ctx.lineTo(toX, toY);
+				ctx.stroke();
+
+				i++;
+				requestAnimationFrame(animatePath);
+			}
+
+			requestAnimationFrame(animatePath);
+		}
+
+		canvas.addEventListener('click', (event) => {
+			if (isAnimating) {
+				// Игнорируем клики во время анимации
+				return;
+			}
+
+			if (!verticalWalls.length || !horizontalWalls.length) {
+				alert('Сначала сгенерируйте или загрузите лабиринт.');
+				return;
+			}
+
+			if (isPathDrawn) {
+				// Очистить путь и начать заново
+				ctx.clearRect(0, 0, canvas.width, canvas.height);
+				drawMaze();
+
+				fromPoint = null;
+				toPoint = null;
+				clickCount = 0;
+				isPathDrawn = false;
+			}
+
+			// Получаем координаты клика
+			const rect = canvas.getBoundingClientRect();
+			const x = event.clientX - rect.left;
+			const y = event.clientY - rect.top;
+
+			// Вычисляем позиции клеток и ограничиваем их
+			let clickedCol = Math.floor(x / cellWidth) + 1;
+			let clickedRow = Math.floor(y / cellHeight) + 1;
+
+			// Ограничиваем значения в пределах размеров лабиринта
+			clickedCol = Math.min(Math.max(clickedCol, 1), cols);
+			clickedRow = Math.min(Math.max(clickedRow, 1), rows);
+
+			clickCount++;
+
+			if (clickCount % 2 === 1) {
+				fromPoint = { x: clickedRow, y: clickedCol };
+				drawCircle(fromPoint.x, fromPoint.y, 'blue');
+			} else {
+				toPoint = { x: clickedRow, y: clickedCol };
+				drawCircle(toPoint.x, toPoint.y, 'green');
+
+				const mazeData = {
+					maze: {
+						vertical: verticalWalls,
+						horizontal: horizontalWalls,
+						rows: rows,
+						cols: cols
+					},
+					from: fromPoint,
+					to: toPoint
+				};
+
+				fetch('http://localhost:8080/solve-maze', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(mazeData)
+				})
+					.then(response => response.json())
+					.then(data => {
+						if (data.path) {
+							drawPath(data.path);
+							isPathDrawn = true;
+						} else {
+							alert('Путь не найден.');
+							fromPoint = null;
+							toPoint = null;
+							clickCount = 0;
+						}
+					})
+					.catch(error => console.error('Error:', error));
+			}
+		});
+
+
+		function drawCircle(row, col, color) {
+			const x = (col - 1) * cellWidth + cellWidth / 2;
+			const y = (row - 1) * cellHeight + cellHeight / 2;
+			let radius = 0;
+
+			function animateCircle() {
+				if (radius >= 6) return;
+
+				// Рисуем круг поверх лабиринта без очистки области
+				ctx.fillStyle = color;
+				ctx.beginPath();
+				ctx.arc(x, y, radius, 0, 2 * Math.PI);
+				ctx.fill();
+				radius += 0.5;
+				requestAnimationFrame(animateCircle);
+			}
+
+			requestAnimationFrame(animateCircle);
+		}
+
+		function blinkCircle(row, col, color, times) {
+			isAnimating = true;
+			const x = (col - 1) * cellWidth + cellWidth / 2;
+			const y = (row - 1) * cellHeight + cellHeight / 2;
+			let count = 0;
+			let visible = false;
+
+			function animateBlink() {
+				if (count >= times * 2) {
+					// Обеспечиваем, что точка видима в конце
+					drawCircle(row, col, color);
+					isAnimating = false;
+					return;
+				}
+
+				ctx.clearRect(0, 0, canvas.width, canvas.height);
+				drawMaze();
+
+				if (visible) {
+					drawCircle(row, col, color);
+				}
+
+				visible = !visible;
+				count++;
+
+				setTimeout(animateBlink, 100);
+			}
+
+			animateBlink();
+		}
+	</script>
+
+</body>
+
+</html>
